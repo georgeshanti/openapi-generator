@@ -4,12 +4,7 @@ package {{packageName}}
 {{#operations}}
 import (
 	"encoding/json"
-	{{#isBodyParam}}
-	    {{^required}}
-	"errors"
 	"io"
-	    {{/required}}
-	{{/isBodyParam}}
 	"net/http"
 	"strings"
 {{#imports}}	"{{import}}"
@@ -587,43 +582,63 @@ func (c *{{classname}}Controller) {{nickname}}(w http.ResponseWriter, r *http.Re
 	{{paramName}}Param := r.Header.Get("{{baseName}}")
 	{{/isHeaderParam}}
 	{{#isBodyParam}}
-	{{paramName}}Param := {{dataType}}{}
-	d := json.NewDecoder(r.Body)
-	{{^isAdditionalPropertiesTrue}}
-	d.DisallowUnknownFields()
-	{{/isAdditionalPropertiesTrue}}
-	if err := d.Decode(&{{paramName}}Param); err != nil {{^required}}&& !errors.Is(err, io.EOF) {{/required}}{
+	data, err := io.ReadAll(r.Body)
+	if err != nil {
 		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
 		return
 	}
 	{{#isArray}}
-		{{#items.isModel}}
-	for _, el := range {{paramName}}Param {
-		if err := Assert{{baseType}}Required(el); err != nil {
-			c.errorHandler(w, r, err, nil)
-			return
-		}
-	}
-		{{/items.isModel}}
-	{{/isArray}}
-	{{^isArray}}
-		{{#isModel}}
-	if err := Assert{{baseType}}Required({{paramName}}Param); err != nil {
-		c.errorHandler(w, r, err, nil)
+	array := make([]any, 0)
+	err = json.Unmarshal(data, &array)
+	if err != nil {
+		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
 		return
 	}
+	for _, item := range array {
+		if item != nil {
+			{{#items.isModel}}
+			subData, err := json.Marshal(item)
+			if err != nil {
+				c.errorHandler(w, r, &ParsingError{Err: err}, nil)
+				return
+			}
+			err = Assert{{items.dataType}}RequiredFields(subData)
+			if err != nil {
+				c.errorHandler(w, r, &ParsingError{Err: err}, nil)
+				return
+			}
+			{{/items.isModel}}
+		}{{^items.isNullable}} else {
+			c.errorHandler(w, r, &RequiredError{Field: "{{dataType}}[]"}, nil)
+			return
+		}{{/items.isNullable}}
+	}
+	{{/isArray}}
+	{{#isModel}}
+	err = Assert{{dataType}}RequiredFields(data)
+	if err != nil {
+		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
+		return
+	}
+	{{/isModel}}
+	{{paramName}}Param := {{dataType}}{}
+	err = json.Unmarshal(data, &{{paramName}}Param)
+	if err != nil {
+		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
+		return
+	}
+    {{#isModel}}
 	if err := Assert{{baseType}}Constraints({{paramName}}Param); err != nil {
 		c.errorHandler(w, r, err, nil)
 		return
 	}
-		{{/isModel}}
-	{{/isArray}}
+    {{/isModel}}
 	{{/isBodyParam}}
 	{{/allParams}}
 	result, err := c.service.{{nickname}}(r.Context(){{#allParams}}, {{paramName}}Param{{/allParams}})
 	// If an error occurred, encode the error with the status code
 	if err != nil {
-		c.errorHandler(w, r, err, &result)
+		c.errorHandler(w, r, err, &ImplResponse[any]{Code: result.Code, Body: result.Body})
 		return
 	}
 	// If no error, encode the body and the result code

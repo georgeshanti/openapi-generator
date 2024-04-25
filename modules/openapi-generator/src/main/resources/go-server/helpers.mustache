@@ -6,8 +6,8 @@ import (
 )
 
 // Response return a ImplResponse struct filled
-func Response(code int, body interface{}) ImplResponse {
-	return ImplResponse {
+func Response[T any] (code int, body T) ImplResponse[T] {
+	return ImplResponse[T] {
 		Code: code,
 		{{#addResponseHeaders}}
 		Headers: nil,
@@ -19,7 +19,7 @@ func Response(code int, body interface{}) ImplResponse {
 
 // ResponseWithHeaders return a ImplResponse struct filled, including headers
 func ResponseWithHeaders(code int, headers map[string][]string, body interface{}) ImplResponse {
-	return ImplResponse {
+	return ImplResponse[T] {
 		Code: code,
 		Headers: headers,
 		Body: body,

@@ -68,7 +68,6 @@ func NewRouter(routers ...Router) {{#routers}}{{#mux}}*mux.Router{{/mux}}{{#chi}
 			handler = route.HandlerFunc
 {{#routers}}
 	{{#mux}}
-			handler = Logger(handler, name)
 			{{#featureCORS}}
 			handler = handlers.CORS()(handler)
 			{{/featureCORS}}
